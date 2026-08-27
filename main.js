@@ -354,29 +354,17 @@ function buildMenu() {
       ],
     },
     // 파일과 편집 사이에 **업무 모듈**이 옵니다 (정산·인사, 앞으로 붙을 것들).
-    // 목록은 화면(작업 공간)이 알려준 것을 그대로 씁니다 — 여기에 화면 이름을 박으면
-    // 화면이 늘어날 때마다 실행파일을 다시 배포해야 합니다.
     //
-    // 모듈 이름을 누르면 그 모듈의 **대문**이 뜨고, 상세 화면은 아래 목록이나
-    // 작업 공간 좌측 메뉴에서 고릅니다 (좌측 메뉴가 기본 경로입니다).
+    // 하위 메뉴를 달지 않습니다. 누르면 곧바로 그 모듈의 **대문**이 뜹니다.
+    // 상세 화면은 작업 공간 **좌측 메뉴**에서 고르는 것이 기본 경로인데,
+    // 창 메뉴에도 같은 목록을 늘어놓으니 길이 두 개가 되어 오히려 헷갈렸습니다
+    // (2026-08-27 하위 메뉴 제거).
+    //
+    // 목록 자체는 여전히 화면이 알려준 것을 씁니다 — 앱에 모듈 이름을 박으면
+    // 모듈이 늘어날 때마다 실행파일을 다시 배포해야 합니다.
     ...appMenuData.modules.map((m) => ({
-      label: m.label,
-      submenu: m.planned
-        ? [
-            { label: m.label + " 홈 (준비 중)", click: () => openModuleInPage(m.key) },
-            { label: "아직 만들지 않은 모듈입니다", enabled: false },
-          ]
-        : [
-            { label: m.label + " 홈", click: () => openModuleInPage(m.key) },
-            { type: "separator" },
-            ...m.groups.flatMap((g) => [
-              { label: g.label, enabled: false },
-              ...g.apps.map((a) => ({
-                label: "   " + a.label,
-                click: () => openAppInPage(a.key),
-              })),
-            ]),
-          ],
+      label: m.planned ? m.label + " (준비 중)" : m.label,
+      click: () => openModuleInPage(m.key),
     })),
     {
       label: "편집",
