@@ -48,13 +48,31 @@ jobs:
           if gh release view "v$v" >/dev/null 2>&1; then
             echo "::warning::v$v 릴리스가 이미 있습니다. package.json 의 version 을 올리세요."
           fi
-          if git rev-parse "v$v" >/dev/null 2>&1; then
+          if git ls-remote --exit-code --tags origin "v$v" >/dev/null 2>&1; then
             echo "태그 v$v 가 이미 있습니다."
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git tag "v$v"
             git push origin "v$v"
+          fi
+          # 릴리스도 **여기서 미리** 만듭니다.
+          #
+          # electron-builder 는 파일마다(.exe, .blockmap) 업로더를 띄우는데, 릴리스가
+          # 없으면 **둘이 동시에 만들려고 달려듭니다.** 2026-08-27 첫 시도에서 한쪽은
+          # 만들고 한쪽은 422 로 죽어서, .exe 와 latest.yml 이 빠진 **반쪽 릴리스**가
+          # 남았습니다 (blockmap 만 올라감). 미리 만들어 두면 둘 다 「올리기」만 합니다.
+          if ! gh release view "v$v" >/dev/null 2>&1; then
+            gh release create "v$v" --title "다올로직스 데스크톱 v$v" --notes "$(cat <<'NOTES'
+다올로직스 통합 관리 시스템 데스크톱 앱 (Windows).
+
+`DaolLogics-Setup-*.exe` 를 받아 실행하면 설치됩니다.
+처음 실행 시 SmartScreen 경고가 나오면 「추가 정보」 → 「실행」 을 누르세요
+(사내 배포라 코드 서명을 하지 않습니다).
+
+이 버전부터 **자동 업데이트**가 들어갑니다 — 앞으로는 앱이 알아서 받습니다.
+NOTES
+)"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
