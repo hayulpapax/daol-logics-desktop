@@ -60,8 +60,8 @@ function resolveConfig() {
 const config = { value: null, origin: null };
 let mainWindow = null;
 
-// 작업 공간이 알려준 화면 목록. 받기 전에는 정산/인사 메뉴에 「작업 공간 열기」만 보입니다.
-let appMenuData = { menus: [], planned: [] };
+// 작업 공간이 알려준 모듈·화면 목록. 받기 전에는 「작업 공간 열기」만 보입니다.
+let appMenuData = { modules: [] };
 
 /**
  * 상단 메뉴에서 화면을 엽니다.
@@ -79,6 +79,21 @@ function openAppInPage(key) {
     "    window.dispatchEvent(new CustomEvent('daol:open-app', { detail: " + k + " }));" +
     "  } else {" +
     "    sessionStorage.setItem('daol_pending_app', " + k + ");" +
+    "    location.href = '/workspace';" +
+    "  }" +
+    "} catch (e) {} })()";
+  mainWindow.webContents.executeJavaScript(js).catch(() => {});
+}
+
+/** 모듈(정산·인사…)의 대문을 엽니다. */
+function openModuleInPage(moduleKey) {
+  if (!mainWindow) return;
+  const k = JSON.stringify(moduleKey);
+  const js =
+    "(() => { try {" +
+    "  if (location.pathname.indexOf('/workspace') === 0) {" +
+    "    window.dispatchEvent(new CustomEvent('daol:open-module', { detail: " + k + " }));" +
+    "  } else {" +
     "    location.href = '/workspace';" +
     "  }" +
     "} catch (e) {} })()";
@@ -341,25 +356,27 @@ function buildMenu() {
     // 파일과 편집 사이에 **업무 모듈**이 옵니다 (정산·인사, 앞으로 붙을 것들).
     // 목록은 화면(작업 공간)이 알려준 것을 그대로 씁니다 — 여기에 화면 이름을 박으면
     // 화면이 늘어날 때마다 실행파일을 다시 배포해야 합니다.
-    ...appMenuData.menus.map((m) => ({
+    //
+    // 모듈 이름을 누르면 그 모듈의 **대문**이 뜨고, 상세 화면은 아래 목록이나
+    // 작업 공간 좌측 메뉴에서 고릅니다 (좌측 메뉴가 기본 경로입니다).
+    ...appMenuData.modules.map((m) => ({
       label: m.label,
-      submenu: [
-        ...m.groups.flatMap((g) => [
-          { label: g.label, enabled: false },
-          ...g.apps.map((a) => ({
-            label: "   " + a.label,
-            click: () => openAppInPage(a.key),
-          })),
-          { type: "separator" },
-        ]),
-        { label: "작업 공간 열기", click: () => goWorkspace() },
-      ],
-    })),
-    // 아직 안 만든 모듈도 이름은 보여줍니다. 「이 프로그램은 정산만 하는 것」이라고
-    // 생각하지 않도록, 어디까지 갈 계획인지 드러내는 자리입니다.
-    ...appMenuData.planned.map((label) => ({
-      label,
-      submenu: [{ label: "준비 중입니다", enabled: false }],
+      submenu: m.planned
+        ? [
+            { label: m.label + " 홈 (준비 중)", click: () => openModuleInPage(m.key) },
+            { label: "아직 만들지 않은 모듈입니다", enabled: false },
+          ]
+        : [
+            { label: m.label + " 홈", click: () => openModuleInPage(m.key) },
+            { type: "separator" },
+            ...m.groups.flatMap((g) => [
+              { label: g.label, enabled: false },
+              ...g.apps.map((a) => ({
+                label: "   " + a.label,
+                click: () => openAppInPage(a.key),
+              })),
+            ]),
+          ],
     })),
     {
       label: "편집",
@@ -481,11 +498,8 @@ if (!app.requestSingleInstanceLock()) {
 
   // 작업 공간이 뜰 때마다 화면 목록을 보내옵니다. 받을 때마다 메뉴를 다시 만듭니다.
   ipcMain.on("daol:apps", (_e, payload) => {
-    if (!payload || !Array.isArray(payload.menus)) return;
-    appMenuData = {
-      menus: payload.menus,
-      planned: Array.isArray(payload.planned) ? payload.planned : [],
-    };
+    if (!payload || !Array.isArray(payload.modules)) return;
+    appMenuData = { modules: payload.modules };
     buildMenu();
   });
 
