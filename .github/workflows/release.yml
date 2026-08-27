@@ -35,13 +35,26 @@ jobs:
 
       # 버전은 package.json 의 version 을 씁니다. 올리는 것을 잊으면
       # 같은 버전으로 릴리스를 덮어쓰게 되고, 이미 설치된 앱은 업데이트를 못 봅니다.
-      - name: 버전 확인
+      #
+      # ⚠️ 태그를 **먼저** 만들어야 합니다. electron-builder 는 곧바로 공개 릴리스를
+      #    만드는데(releaseType: release), GitHub 는 공개 릴리스에 실재하는 태그를
+      #    요구합니다 — 없으면 `422 Published releases must have a valid tag` 입니다.
+      #    (2026-08-27 첫 릴리스에서 실제로 이 오류를 냈습니다.)
+      - name: 버전 확인 + 태그 만들기
         shell: bash
         run: |
           v=$(node -p "require('./package.json').version")
           echo "빌드 버전: $v"
           if gh release view "v$v" >/dev/null 2>&1; then
             echo "::warning::v$v 릴리스가 이미 있습니다. package.json 의 version 을 올리세요."
+          fi
+          if git rev-parse "v$v" >/dev/null 2>&1; then
+            echo "태그 v$v 가 이미 있습니다."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "v$v"
+            git push origin "v$v"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
