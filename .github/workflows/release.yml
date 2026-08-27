@@ -1,0 +1,59 @@
+# Windows 실행파일을 만들고 **릴리스에 올립니다.**
+#
+# electron-builder 가 릴리스 생성과 업로드까지 합니다 (`--publish always`).
+# 그래야 설치본(.exe) 과 함께 `latest.yml` 이 올라가는데, 앱의 자동 업데이트가
+# 새 버전이 있는지 확인할 때 보는 파일이 바로 그것입니다.
+# .exe 만 손으로 올리면 **업데이트가 영영 안 걸립니다.**
+#
+# 이 저장소가 공개인 이유: 앱이 토큰 없이 릴리스를 읽어야 하기 때문입니다.
+# 비공개 저장소에서 받으려면 토큰을 앱 안에 넣어야 하는데, 그러면 설치본을 가진
+# 사람이 토큰을 꺼내 소스를 읽을 수 있습니다. 그래서 **껍데기만** 여기 두고
+# 업무 로직·데이터는 비공개 저장소에 남겨뒀습니다.
+name: 릴리스 (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # 버전은 package.json 의 version 을 씁니다. 올리는 것을 잊으면
+      # 같은 버전으로 릴리스를 덮어쓰게 되고, 이미 설치된 앱은 업데이트를 못 봅니다.
+      - name: 버전 확인
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "빌드 버전: $v"
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "::warning::v$v 릴리스가 이미 있습니다. package.json 의 version 을 올리세요."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 빌드 + 릴리스 업로드
+        run: npm run release:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DaolLogics-Setup
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
