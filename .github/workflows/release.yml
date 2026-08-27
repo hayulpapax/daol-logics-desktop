@@ -75,6 +75,10 @@ jobs:
             gh release create "v$v" --title "다올로직스 데스크톱 v$v" --notes-file notes.md
             rm -f notes.md
           fi
+        # gh 는 토큰이 없으면 그냥 안내만 찍고 끝납니다 (조용히 실패하지 않도록 exit 4).
+        # 앞선 블록 교체 때 이 env 가 통째로 날아가서 v1.1.1 첫 시도가 여기서 멈췄습니다.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 빌드 + 릴리스 업로드
         run: npm run release:win
