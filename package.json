@@ -3,8 +3,8 @@
   "productName": "다올로직스",
   "version": "1.1.0",
   "private": true,
-  "description": "다올글로벌로직스 정산·인사 관리 시스템 데스크톱 앱",
-  "author": "다올글로벌로직스",
+  "description": "다올로직스 통합 관리 시스템 데스크톱 앱",
+  "author": "다올로직스",
   "license": "UNLICENSED",
   "main": "main.js",
   "scripts": {
@@ -19,7 +19,7 @@
   "build": {
     "appId": "com.daollogics.suite",
     "productName": "다올로직스",
-    "copyright": "다올글로벌로직스",
+    "copyright": "다올로직스",
     "directories": {
       "output": "dist",
       "buildResources": "build"

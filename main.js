@@ -39,23 +39,58 @@ function readJson(file) {
  * 셋 다 없으면 null 을 돌려주고, 호출한 쪽이 에러 화면을 띄웁니다.
  */
 function resolveConfig() {
+  const bundled = readJson(path.join(__dirname, CONFIG_FILE)) || {};
+  const userCfg = readJson(path.join(app.getPath("userData"), CONFIG_FILE)) || {};
+  // 설정은 **합칩니다.** 예전에는 DAOL_APP_URL 만 주면 나머지(창 제목·시작 화면)가
+  // 통째로 사라져서, 개발 중에만 다른 화면이 뜨는 혼란이 있었습니다.
+  const merged = { ...bundled, ...userCfg };
+
   const fromEnv = (process.env.DAOL_APP_URL || "").trim();
-  if (fromEnv) return { appUrl: fromEnv, source: "환경변수 DAOL_APP_URL" };
+  if (fromEnv) return { ...merged, appUrl: fromEnv, source: "환경변수 DAOL_APP_URL" };
 
-  const userCfg = readJson(path.join(app.getPath("userData"), CONFIG_FILE));
-  if (userCfg && typeof userCfg.appUrl === "string" && userCfg.appUrl.trim()) {
-    return { ...userCfg, appUrl: userCfg.appUrl.trim(), source: "사용자 설정 파일" };
-  }
+  const userUrl = typeof userCfg.appUrl === "string" ? userCfg.appUrl.trim() : "";
+  if (userUrl) return { ...merged, appUrl: userUrl, source: "사용자 설정 파일" };
 
-  const bundled = readJson(path.join(__dirname, CONFIG_FILE));
-  if (bundled && typeof bundled.appUrl === "string" && bundled.appUrl.trim()) {
-    return { ...bundled, appUrl: bundled.appUrl.trim(), source: "설치본 설정" };
-  }
+  const bundledUrl = typeof bundled.appUrl === "string" ? bundled.appUrl.trim() : "";
+  if (bundledUrl) return { ...merged, appUrl: bundledUrl, source: "설치본 설정" };
+
   return null;
 }
 
 const config = { value: null, origin: null };
 let mainWindow = null;
+
+// 작업 공간이 알려준 화면 목록. 받기 전에는 정산/인사 메뉴에 「작업 공간 열기」만 보입니다.
+let appMenuData = { menus: [], planned: [] };
+
+/**
+ * 상단 메뉴에서 화면을 엽니다.
+ *
+ * 주소를 바꾸는 방식(location.href = "/settlement/dashboard")으로 하면 페이지가 새로
+ * 뜨면서 **열어둔 창이 전부 닫힙니다.** 그래서 작업 공간이면 이벤트만 던지고,
+ * 아직 작업 공간이 아니면 그때만 한 번 이동한 뒤 이어서 엽니다.
+ */
+function openAppInPage(key) {
+  if (!mainWindow) return;
+  const k = JSON.stringify(key);
+  const js =
+    "(() => { try {" +
+    "  if (location.pathname.indexOf('/workspace') === 0) {" +
+    "    window.dispatchEvent(new CustomEvent('daol:open-app', { detail: " + k + " }));" +
+    "  } else {" +
+    "    sessionStorage.setItem('daol_pending_app', " + k + ");" +
+    "    location.href = '/workspace';" +
+    "  }" +
+    "} catch (e) {} })()";
+  mainWindow.webContents.executeJavaScript(js).catch(() => {});
+}
+
+function goWorkspace() {
+  if (!mainWindow) return;
+  mainWindow.webContents
+    .executeJavaScript("location.href = '/workspace'")
+    .catch(() => {});
+}
 
 function saveWindowState(win) {
   if (!win || win.isDestroyed()) return;
@@ -100,7 +135,10 @@ function loadApp(win) {
     );
     return;
   }
-  win.loadURL(config.value.appUrl);
+  // 기본으로 여는 곳은 작업 공간입니다 (창을 여러 개 띄우는 화면).
+  // 예전처럼 한 화면씩 보고 싶으면 그 화면 오른쪽 위 「기본 화면」으로 갈 수 있습니다.
+  const start = (config.value.startPath || "").trim();
+  win.loadURL(start ? new URL(start, config.value.appUrl).toString() : config.value.appUrl);
 }
 
 function createWindow() {
@@ -281,6 +319,12 @@ function buildMenu() {
       label: "파일",
       submenu: [
         {
+          label: "작업 공간",
+          accelerator: "CmdOrCtrl+0",
+          click: () => goWorkspace(),
+        },
+        { type: "separator" },
+        {
           label: "새로고침",
           accelerator: "CmdOrCtrl+R",
           click: () => mainWindow && mainWindow.webContents.reload(),
@@ -294,6 +338,29 @@ function buildMenu() {
         { role: "quit", label: "종료" },
       ],
     },
+    // 파일과 편집 사이에 **업무 모듈**이 옵니다 (정산·인사, 앞으로 붙을 것들).
+    // 목록은 화면(작업 공간)이 알려준 것을 그대로 씁니다 — 여기에 화면 이름을 박으면
+    // 화면이 늘어날 때마다 실행파일을 다시 배포해야 합니다.
+    ...appMenuData.menus.map((m) => ({
+      label: m.label,
+      submenu: [
+        ...m.groups.flatMap((g) => [
+          { label: g.label, enabled: false },
+          ...g.apps.map((a) => ({
+            label: "   " + a.label,
+            click: () => openAppInPage(a.key),
+          })),
+          { type: "separator" },
+        ]),
+        { label: "작업 공간 열기", click: () => goWorkspace() },
+      ],
+    })),
+    // 아직 안 만든 모듈도 이름은 보여줍니다. 「이 프로그램은 정산만 하는 것」이라고
+    // 생각하지 않도록, 어디까지 갈 계획인지 드러내는 자리입니다.
+    ...appMenuData.planned.map((label) => ({
+      label,
+      submenu: [{ label: "준비 중입니다", enabled: false }],
+    })),
     {
       label: "편집",
       submenu: [
@@ -411,6 +478,16 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   ipcMain.on("daol:retry", () => mainWindow && loadApp(mainWindow));
+
+  // 작업 공간이 뜰 때마다 화면 목록을 보내옵니다. 받을 때마다 메뉴를 다시 만듭니다.
+  ipcMain.on("daol:apps", (_e, payload) => {
+    if (!payload || !Array.isArray(payload.menus)) return;
+    appMenuData = {
+      menus: payload.menus,
+      planned: Array.isArray(payload.planned) ? payload.planned : [],
+    };
+    buildMenu();
+  });
 
   app.on("window-all-closed", () => {
     app.quit();
