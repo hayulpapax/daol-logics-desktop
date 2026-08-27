@@ -63,19 +63,18 @@ jobs:
           # 만들고 한쪽은 422 로 죽어서, .exe 와 latest.yml 이 빠진 **반쪽 릴리스**가
           # 남았습니다 (blockmap 만 올라감). 미리 만들어 두면 둘 다 「올리기」만 합니다.
           if ! gh release view "v$v" >/dev/null 2>&1; then
-            gh release create "v$v" --title "다올로직스 데스크톱 v$v" --notes "$(cat <<'NOTES'
-다올로직스 통합 관리 시스템 데스크톱 앱 (Windows).
-
-`DaolLogics-Setup-*.exe` 를 받아 실행하면 설치됩니다.
-처음 실행 시 SmartScreen 경고가 나오면 「추가 정보」 → 「실행」 을 누르세요
-(사내 배포라 코드 서명을 하지 않습니다).
-
-이 버전부터 **자동 업데이트**가 들어갑니다 — 앞으로는 앱이 알아서 받습니다.
-NOTES
-)"
+            printf '%s\n' \
+              "다올로직스 통합 관리 시스템 데스크톱 앱 (Windows)." \
+              "" \
+              "\`DaolLogics-Setup-*.exe\` 를 받아 실행하면 설치됩니다." \
+              "처음 실행 시 SmartScreen 경고가 나오면 「추가 정보」 → 「실행」 을 누르세요" \
+              "(사내 배포라 코드 서명을 하지 않습니다)." \
+              "" \
+              "v1.1.0 이상부터 **자동 업데이트**가 들어갑니다 — 앞으로는 앱이 알아서 받습니다." \
+              > notes.md
+            gh release create "v$v" --title "다올로직스 데스크톱 v$v" --notes-file notes.md
+            rm -f notes.md
           fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 빌드 + 릴리스 업로드
         run: npm run release:win
